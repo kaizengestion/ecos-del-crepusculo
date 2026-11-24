@@ -1079,6 +1079,7 @@ function openNPC(npc){
       addNPCBtn(body,`<span style="color:${col}">${name}</span>`,()=>{
         if(gs.gold<item.price){log('Oro insuficiente.','#ef4444');return;}
         gs.gold-=item.price;
+        if(item.kind==='pot'&&item.name.includes('Maná')){gs.mp=Math.min(getEffStats().maxMp,gs.mp+60);log('Maná restaurado (+60 MP).','#60a5fa');updateHUD();return;}
         if(item.kind==='pot')gs.potions++;
         else{if(bag.length>=20){log('Mochila llena.','#ef4444');return;}bag.push(createItem(item.slot,item.rar,1));}
         log('Comprado. [I] para equipar.','#4ade80');updateHUD();
