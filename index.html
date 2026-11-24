@@ -845,7 +845,7 @@ function buildMenu(){
     drawHeroSprite(pc,36,46,cls,'M',1,0,0,0,1.6);
     const cl=CLASSES[cls];
     card.appendChild(preC);
-    card.innerHTML+=`<div class="cname">${cls}</div><div class="cstat">HP:${cl.hp} ATK:${cl.atk} VEL:${cl.spd}</div>`;
+    card.insertAdjacentHTML('beforeend',`<div class="cname">${cls}</div><div class="cstat">HP:${cl.hp} ATK:${cl.atk} VEL:${cl.spd}</div>`);
     card.onclick=()=>{
       curClass=cls;
       document.querySelectorAll('.cls-card').forEach(c=>c.classList.remove('active'));
@@ -935,6 +935,12 @@ function isWalkable(wx,wy){
   if(tx<0||tx>=curMap.w||ty<0||ty>=curMap.h)return false;
   const c=getCell(tx,ty);
   return c===1; // solo suelo
+}
+// El héroe ocupa un área (no solo su centro): revisa las 4 esquinas de su "pie".
+const HERO_R=7;
+function heroCanStand(x,y){
+  return isWalkable(x-HERO_R,y-HERO_R)&&isWalkable(x+HERO_R,y-HERO_R)&&
+         isWalkable(x-HERO_R,y+HERO_R)&&isWalkable(x+HERO_R,y+HERO_R);
 }
 
 function revealAll(){if(!curMap.fog)return;curMap.fog=new Uint8Array(curMap.w*curMap.h).fill(1);}
@@ -1153,8 +1159,10 @@ function update(){
     lastDir={x:dx||lastDir.x,y:dy||0};
     // Colisión con tiles
     const nx=gs.x+dx*eff.spd, ny=gs.y+dy*eff.spd;
-    if(isWalkable(nx,gs.y))gs.x=nx; else if(dx>0)gs.x=Math.floor(gs.x/TILE)*TILE+TILE-gs.size-1; else gs.x=Math.ceil(gs.x/TILE)*TILE+gs.size+1;
-    if(isWalkable(gs.x,ny))gs.y=ny; else if(dy>0)gs.y=Math.floor(gs.y/TILE)*TILE+TILE-gs.size-1; else gs.y=Math.ceil(gs.y/TILE)*TILE+gs.size+1;
+    // Si el lugar actual ya está pegado a una pared (p. ej. al aparecer), no bloquear: usar solo el centro.
+    const free=heroCanStand(gs.x,gs.y)?heroCanStand:isWalkable;
+    if(dx&&free(nx,gs.y))gs.x=nx;
+    if(dy&&free(gs.x,ny))gs.y=ny;
     walkCycle+=.28;
     revealAround(gs.x,gs.y);
   }
