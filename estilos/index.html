@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pruebas de estilo - Ecos del Crepusculo</title>
+<style>
+body{margin:0;background:#111;color:#ddd;font:14px system-ui,sans-serif}
+h1{font-size:18px;margin:12px}
+.bar{margin:0 12px 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{background:#333;color:#eee;border:1px solid #666;padding:8px 12px;border-radius:4px;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:12px;margin:0 12px 16px}
+.box{flex:1 1 320px}
+.box h2{font-size:15px;margin:4px 0}
+canvas{width:100%;background:#000;image-rendering:pixelated;display:block;border:1px solid #444}
+p{margin:4px 12px;color:#aaa}
+</style></head><body>
+<h1>Ecos del Crepúsculo - pruebas de estética y mapas</h1>
+<div class="bar"><button id="nuevo">Nuevo mapa</button><button id="rev">Revelar todo</button>
+<span>Mové con WASD / flechas (o tocá el mapa). El mismo mapa en dos estilos.</span></div>
+<div class="row">
+<div class="box"><h2>A) Estilo Tibia (tierra gris, ladrillo, antorcha)</h2><canvas id="a" width="480" height="352"></canvas></div>
+<div class="box"><h2>B) Estilo Terraria (colores vivos, borde oscuro, luz)</h2><canvas id="b" width="480" height="352"></canvas></div>
+</div>
+<p>Mapa generado con autómata celular + caminos serpenteantes (drunkard walk), solo se conserva la zona conectada. Lo no explorado queda negro.</p>
+<script>
+const W=70,H=50,T=16,S=2,VW=15,VH=11;
+let seed=Date.now()%100000;
+function rng(s){return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+let g,exp,hero;
+function gen(){
+  const r=rng(seed++);
+  g=[];for(let y=0;y<H;y++){g[y]=[];for(let x=0;x<W;x++)g[y][x]=(x<2||y<2||x>W-3||y>H-3)?1:(r()<0.46?1:0)}
+  for(let i=0;i<5;i++){const n=g.map(a=>a.slice());
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){let c=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)c+=g[y+dy][x+dx];n[y][x]=c>=5?1:0}
+    g=n}
+  // caminos serpenteantes
+  for(let k=0;k<4;k++){let x=4+(r()*(W-8)|0),y=4+(r()*(H-8)|0),d=r()*4|0;
+    for(let s=0;s<260;s++){if(r()<.2)d=r()*4|0;x+=[1,-1,0,0][d];y+=[0,0,1,-1][d];x=Math.max(3,Math.min(W-4,x));y=Math.max(3,Math.min(H-4,y));g[y][x]=0;if(r()<.5)g[y+(r()<.5?1:0)][x]=0}}
+  // zona conexa mayor
+  const seen=new Set();let best=[];
+  for(let y=2;y<H-2;y++)for(let x=2;x<W-2;x++){if(g[y][x]||seen.has(y*W+x))continue;
+    const q=[[x,y]],c=[];seen.add(y*W+x);
+    while(q.length){const [a,b]=q.pop();c.push([a,b]);for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=a+dx,ny=b+dy;if(nx>0&&ny>0&&nx<W&&ny<H&&!g[ny][nx]&&!seen.has(ny*W+nx)){seen.add(ny*W+nx);q.push([nx,ny])}}}
+    if(c.length>best.length)best=c}
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)g[y][x]=1;
+  best.forEach(([x,y])=>g[y][x]=0);
+  const st=best[best.length>>1];hero={x:st[0],y:st[1]};
+  exp=g.map(a=>a.map(()=>0));reveal();
+}
+function reveal(){for(let dy=-6;dy<=6;dy++)for(let dx=-6;dx<=6;dx++){const x=hero.x+dx,y=hero.y+dy;if(dx*dx+dy*dy<=38&&x>=0&&y>=0&&x<W&&y<H)exp[y][x]=1}}
+// ---- tiles ----
+const PAL={
+ a:{floor:['#6e655a','#645c52','#7a7064','#58504a'],wallF:['#4c4339','#3f372f','#5a5045'],mortar:'#2b251f',wallT:'#201c18',moss:'#4b6b34',glow:'255,170,70'},
+ b:{floor:['#8a5a30','#7a4e28','#9a6a3a','#6a4222'],wallF:['#4f6a8a','#43597a','#5c7aa0'],mortar:'#1c2638',wallT:'#141b2b',moss:'#3fae3a',glow:'255,200,90'}};
+function tiles(k){
+  const p=PAL[k],r=rng(k=='a'?7:99),out={floor:[],face:[],top:[]};
+  const mk=()=>{const c=document.createElement('canvas');c.width=c.height=T;return c};
+  for(let v=0;v<4;v++){const c=mk(),x=c.getContext('2d');
+    for(let i=0;i<T;i++)for(let j=0;j<T;j++){x.fillStyle=p.floor[r()*4|0];if(r()<.6)x.fillStyle=p.floor[0];x.fillRect(i,j,1,1)}
+    if(k=='a'){x.fillStyle='#00000030';for(let n=0;n<3;n++)x.fillRect(r()*14|0,r()*14|0,2,1);if(v==3){x.fillStyle=p.moss;for(let n=0;n<8;n++)x.fillRect(4+r()*8|0,4+r()*8|0,2,1)}}
+    else{x.fillStyle='#ffffff25';for(let n=0;n<5;n++)x.fillRect(r()*15|0,r()*15|0,1,1);x.fillStyle='#0003';for(let n=0;n<4;n++)x.fillRect(r()*15|0,r()*15|0,2,2)}
+    out.floor.push(c)}
+  for(let v=0;v<3;v++){const c=mk(),x=c.getContext('2d');
+    x.fillStyle=p.mortar;x.fillRect(0,0,T,T);
+    for(let row=0;row<4;row++){const off=row%2?4:0;for(let bx=-1;bx<3;bx++){const X=bx*8+off+1,Y=row*4+1;x.fillStyle=p.wallF[(r()*3|0)];x.fillRect(X,Y,7,3);x.fillStyle='#ffffff22';x.fillRect(X,Y,7,1)}}
+    if(k=='b'){x.fillStyle=p.moss;x.fillRect(0,0,T,3);x.fillStyle='#6fd45a';for(let n=0;n<T;n+=2)x.fillRect(n,0,1,1+(r()*3|0))}
+    out.face.push(c)}
+  {const c=mk(),x=c.getContext('2d');x.fillStyle=p.wallT;x.fillRect(0,0,T,T);
+   x.fillStyle=k=='a'?'#2e2924':'#1d2740';for(let n=0;n<10;n++)x.fillRect(r()*14|0,r()*14|0,2,2);out.top.push(c)}
+  return out}
+const TL={a:tiles('a'),b:tiles('b')};
+const hash=(x,y)=>((x*73856093)^(y*19349663))>>>0;
+function draw(id,k){
+  const cv=document.getElementById(id),c=cv.getContext('2d');c.imageSmoothingEnabled=false;
+  const cw=cv.width,ch=cv.height,ts=T*S;
+  const ox=Math.round(hero.x*ts+ts/2-cw/2),oy=Math.round(hero.y*ts+ts/2-ch/2);
+  c.fillStyle='#000';c.fillRect(0,0,cw,ch);
+  const tl=TL[k],p=PAL[k];
+  const x0=Math.floor(ox/ts),y0=Math.floor(oy/ts);
+  for(let y=y0;y<=y0+VH+1;y++)for(let x=x0;x<=x0+VW+2;x++){
+    if(x<0||y<0||x>=W||y>=H||!exp[y][x])continue;
+    const h=hash(x,y),px=x*ts-ox,py=y*ts-oy;
+    let t;
+    if(!g[y][x])t=tl.floor[h%4];
+    else if(y+1<H&&!g[y+1][x])t=tl.face[h%3];
+    else t=tl.top[0];
+    c.drawImage(t,px,py,ts,ts);
+    const d=Math.hypot(x-hero.x,y-hero.y);
+    let a=Math.min(.82,Math.max(0,(d-2.5)/6)); // oscuridad
+    if(d>7)a=.82;
+    c.fillStyle='rgba(0,0,0,'+a.toFixed(2)+')';c.fillRect(px,py,ts,ts);
+    if(k=='b'&&!g[y][x]&&y>0&&g[y-1][x]){c.fillStyle='rgba(0,0,0,.35)';c.fillRect(px,py,ts,4)}
+  }
+  // antorcha / luz
+  const hx=hero.x*ts+ts/2-ox,hy=hero.y*ts+ts/2-oy;
+  const gr=c.createRadialGradient(hx,hy,4,hx,hy,ts*5);gr.addColorStop(0,'rgba('+p.glow+',.35)');gr.addColorStop(1,'rgba('+p.glow+',0)');
+  c.globalCompositeOperation='lighter';c.fillStyle=gr;c.fillRect(0,0,cw,ch);c.globalCompositeOperation='source-over';
+  // heroe
+  c.fillStyle='#000';c.fillRect(hx-9,hy-13,18,26);
+  c.fillStyle=k=='a'?'#c9a46a':'#ffd27a';c.fillRect(hx-7,hy-11,14,8);
+  c.fillStyle=k=='a'?'#7a2a2a':'#d93a3a';c.fillRect(hx-7,hy-3,14,10);
+  c.fillStyle='#2a2a4a';c.fillRect(hx-7,hy+7,6,5);c.fillRect(hx+1,hy+7,6,5);
+}
+function all(){draw('a','a');draw('b','b')}
+function mv(dx,dy){const nx=hero.x+dx,ny=hero.y+dy;if(!g[ny][nx]){hero.x=nx;hero.y=ny;reveal();all()}}
+addEventListener('keydown',e=>{const m={ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0],ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1]}[e.key];if(m){mv(...m);e.preventDefault()}});
+['a','b'].forEach(id=>document.getElementById(id).addEventListener('pointerdown',e=>{const r=e.target.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;Math.abs(x)>Math.abs(y)?mv(x>0?1:-1,0):mv(0,y>0?1:-1)}));
+document.getElementById('nuevo').onclick=()=>{gen();all()};
+document.getElementById('rev').onclick=()=>{exp.forEach(a=>a.fill(1));all()};
+gen();all();
+window.__t={mv,gen,all,get g(){return g},get exp(){return exp},get hero(){return hero}};
+</script></body></html>
